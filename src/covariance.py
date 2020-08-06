@@ -1,6 +1,31 @@
-def sky_covariance_pab(u, v, nu, S_low=1e-3, S_mid=1., S_high=10., gamma=0.8, mode = 'frequency', nu_0 = 150e6,
 
-                   dx=1.1):
+class Covariance:
+    def __init__(self, s_low=1e-3, s_mid=1., s_high=10., gamma=0.8):
+        self.gamma = gamma
+        self.s_low = s_low
+        self.s_mid = s_mid
+        self.s_high = s_high
+        return
+
+    def compute_sky_covariance(self, u, v, nu, mode = 'frequency'):
+
+        return covariance
+
+    def compute_beam_covariance(self, u, v, nu, mode = 'frequency'):
+        return covariance
+
+    def compute_position_covariance(self, u, v, nu, mode = 'frequency'):
+        return covariance
+
+
+def beam_covariance_pab(u, v, nu, S_low=1e-3, S_mid=1., S_high=10., gamma=0.8, mode = 'frequency', nu_0 = 150e6, dx=1.1):
+
+    return
+
+
+
+
+def sky_covariance_pab(u, v, nu, S_low=1e-3, S_mid=1., S_high=10., gamma=0.8, mode = 'frequency', nu_0 = 150e6, dx=1.1):
     mu_2 = sky_moment_returner(2, s_low=S_low, s_mid=S_mid, s_high=S_high)
     x, y = mwa_dipole_locations(dx=dx)
 
