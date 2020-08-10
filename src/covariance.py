@@ -34,7 +34,7 @@ class Covariance:
         ## check whether all parameters are the same
         # total_covariance.matrix = self.matrix + other.matrix
         # return total_covariance
-    #
+
 
     def compute_power(self):
         n_u_scales = self.matrix.shape[0]
