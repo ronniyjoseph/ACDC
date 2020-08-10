@@ -10,11 +10,8 @@ from pyrem.radiotelescope import beam_width
 
 
 class Covariance:
-    def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8, model_depth = None, alpha1 = 1.59, alpha2 = 2.5,
-                 k1 = 4100, k2 = 4100):
-
-        self.model_depth = model_depth          #Survey Catalogue Depth for Sky Modelling
-
+    def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8, alpha1 = 1.59, alpha2 = 2.5,
+                 k1 = 4100, k2 = 4100, calibration_type = None):
         self.matrix = None                      #Place Holder for Covariance Computation
         self.nu = None                          #Place Holder for Frequency array
         self.u = None                           #Place Holder for baseline lengths
@@ -31,12 +28,12 @@ class Covariance:
         return
 
 
-    def __add__(self, other):
-        total_covariance = Covariance()
-        ### check whether all parameters are the same
-        total_covariance.matrix = self.matrix + other.matrix
-        return total_covariance
-
+    # def __add__(self, other):
+    #     total_covariance = Covariance()
+        ## check whether all parameters are the same
+        # total_covariance.matrix = self.matrix + other.matrix
+        # return total_covariance
+    #
 
     def compute_power(self):
         n_u_scales = self.matrix.shape[0]
@@ -55,10 +52,19 @@ class Covariance:
 
 class SkyCovariance(Covariance):
 
+    def __init__(self, model_depth = None, **kwargs):
+        self.model_depth = model_depth
+
+        assert self.model_depth is not None, "Specify a sky model catalogue depth by setting 'model_depth'"
+
+
+        super(SkyCovariance, self).__init__(**kwargs)
+
+
     def compute_covariance(self, u, v, nu):
         mu_2 = sky_moment_returner(n_order=2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth, k1=self.k1,
                                    gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
-        x, y = mwa_dipole_locations(dx=dx)
+        x, y = mwa_dipole_locations(dx=1.1)
 
         nn1, nn2 = numpy.meshgrid(nu, nu)
         xx = (numpy.meshgrid(x, x, x, x, indexing="ij"))
@@ -75,13 +81,68 @@ class SkyCovariance(Covariance):
         for k in range(len(u)):
             pool = multiprocessing.Pool(4)
             output = numpy.array(
-            pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, gamma), index))
+            pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
             self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * mu_2 * output / dxx[0].shape[0] ** 4
-            self.matrix[k, j_index[index], i_index[index]] = covariance[i_index[index], j_index[index]]
+            self.matrix[k, j_index[index], i_index[index]] = self.matrix[k, i_index[index], j_index[index]]
 
-        return covariance
+        return self.matrix
 
 
+class BeamCovariance(Covariance):
+
+    def __init__(self, model_depth = None, calibration_type=None, **kwargs):
+        self.model_depth = model_depth
+        self.calibration_type = calibration_type
+
+        assert self.model_depth is not None, "Specify a sky model catalogue depth by setting 'model_depth'"
+        assert self.calibration_type is not None, "Specify a sky model catalogue depth by setting 'calibration_type' to" \
+                                                  "'sky' or 'redundant'"
+        super(BeamCovariance, self).__init__(**kwargs)
+
+
+    def compute_covariance(self, u, v, nu):
+
+        mu_1_r = sky_moment_returner(1, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
+                                   gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
+        mu_2_r = sky_moment_returner(2, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
+                                   gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
+
+        mu_1_m = sky_moment_returner(1, s_low=self.model_depth, s_mid = self.s_mid, s_high=self.s_high, k1 = self.k1,
+        gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
+        mu_2_m = sky_moment_returner(2, s_low=self.model_depth, s_mid = self.s_mid, s_high=self.s_high, k1 = self.k1,
+        gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
+
+        x, y = mwa_dipole_locations(dx=1.1)
+        nn1, nn2 = numpy.meshgrid(nu, nu)
+        index, i_index, j_index = covariance_indexing(nu)
+
+        xx = (numpy.meshgrid(x, x, x, indexing="ij"))
+        yy = (numpy.meshgrid(y, y, y, indexing="ij"))
+        dxx = (xx[1] - xx[0], xx[0] - xx[2])
+        dyy = (yy[1] - yy[0], yy[0] - yy[2])
+
+        self.matrix = numpy.zeros((len(u), len(nu), len(nu)))
+        self.u = u
+        self.nu = nu
+
+        for k in range(len(u)):
+            pool = multiprocessing.Pool(4)
+            kernel_A = numpy.array(
+                pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+            self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * (mu_2_m + mu_2_r) * kernel_A / dxx[0].shape[0] ** 5
+
+            if self.calibration_type == 'sky':
+                xx = (numpy.meshgrid(x, x, x, x, indexing="ij"))
+                yy = (numpy.meshgrid(y, y, y, y, indexing="ij"))
+                dxx = (xx[2] - xx[0], xx[1] - xx[3])
+                dyy = (yy[2] - yy[0], yy[1] - yy[3])
+                kernel_B = numpy.array(
+                    pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+                self.matrix[k,i_index[index], j_index[index]] += -4 * numpy.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
+
+            self.matrix[k, j_index[index], i_index[index]] = self.matrix[k,i_index[index], j_index[index]]
+
+        return self.matrix
 
 def beam_covariance_pab(u, v, nu, model_limit = 0.1, S_low=1e-5, S_mid=1., S_high=10., gamma=0.8, mode = 'frequency',
                         nu_0 = 150e6, dx=1.1, calibration_type = 'sky'):
