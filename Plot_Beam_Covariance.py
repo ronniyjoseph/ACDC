@@ -2,8 +2,8 @@ import numpy
 import argparse
 from matplotlib import colors
 
-from pyrem.covariance import sky_covariance
 from src.covariance import beam_covariance_pab
+from src.covariance import BeamCovariance
 
 from pyrem.powerspectrum import compute_power
 from pyrem.powerspectrum import from_frequency_to_eta
@@ -18,20 +18,23 @@ def main(labelfontsize = 16, ticksize= 11):
     eta = from_frequency_to_eta(frequency_range)
 
     start = time.time()
-    sky_error_power = calculate_sky_power_spectrum(u=u_range, nu=frequency_range)
+    beam_covariance = BeamCovariance(model_depth=100e-3, calibration_type='sky')
+    beam_covariance.compute_covariance(u=u_range, v=0, nu=frequency_range)
+    beam_error_power =beam_covariance.compute_power()
+    # beam_error_power = calculate_sky_power_spectrum(u=u_range, nu=frequency_range)
     lapse = time.time() - start
     print(f"It took {lapse}")
     figure, axes = pyplot.subplots(1, 1, figsize=(5, 5))
 
     ps_norm = colors.LogNorm(vmin=1e3, vmax=1e15)
 
-    plot_2dpower_spectrum(u_range, eta, frequency_range, sky_error_power, title="Sky Model Error", axes=axes,
+    plot_2dpower_spectrum(u_range, eta, frequency_range, beam_error_power, title="Beam Error", axes=axes,
                         axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=True,
                         xlabel_show=True, norm=ps_norm, ylabel_show=True, zlabel_show=True)
 
     figure.tight_layout()
     # pyplot.show()
-    figure.savefig("../plots/beam_covariance.pdf")
+    figure.savefig("../plots/Beam_Class_Test.pdf")
 
     return
 
