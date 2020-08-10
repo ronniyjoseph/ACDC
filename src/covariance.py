@@ -10,26 +10,35 @@ from pyrem.radiotelescope import beam_width
 
 
 class Covariance:
-    def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8, model_depth = None):
-        self.gamma = gamma
-        self.s_low = s_low
-        self.s_mid = s_mid
-        self.s_high = s_high
-        self.model_depth = None
-        self.matrix = model_depth
+    def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8, model_depth = None, alpha1 = 1.59, alpha2 = 2.5,
+                 k1 = 4100, k2 = 4100):
+
+        self.model_depth = model_depth          #Survey Catalogue Depth for Sky Modelling
+
+        self.matrix = None                      #Place Holder for Covariance Computation
+        self.nu = None                          #Place Holder for Frequency array
+        self.u = None                           #Place Holder for baseline lengths
+        self.gamma = gamma                      #Radio Spectral Energy Distribution Power Law Index
+
+        self.s_low = s_low                      #Lowest Brightness sources
+        self.s_mid = s_mid                      #Midpoint Brightness Source Counts
+        self.s_high = s_high                    #Maximum Brightness Source Counts
+        self.alpha1 = alpha1                    #Source Count Slope
+        self.alpha2 = alpha2                    #Source Count Slope
+        self.k1 = k1                            #Source Count Normalisation
+        self.k2 = k2                            #Source count normalisation
+
         return
+
 
     def __add__(self, other):
         total_covariance = Covariance()
         ### check whether all parameters are the same
         total_covariance.matrix = self.matrix + other.matrix
-
-    def compute_covariance(self, u, v, nu, mode = 'frequency'):
-
-        return covariance
+        return total_covariance
 
 
-    def compute_power():
+    def compute_power(self):
         n_u_scales = self.matrix.shape[0]
         n_nu_channels = self.matrix.shape[1]
         variance = numpy.zeros((n_u_scales, int(n_nu_channels/2)))
@@ -38,14 +47,40 @@ class Covariance:
             variance[i, :] = compute_power(nu, self.matrix[i,...])
 
         return power
-    def compute_beam_covariance(self, u, v, nu, mode = 'frequency'):
-        return covariance
 
-    def compute_position_covariance(self, u, v, nu, mode = 'frequency'):
-        return covariance
 
     def setup_computation(self):
         return
+
+
+class SkyCovariance(Covariance):
+
+    def compute_covariance(self, u, v, nu):
+        mu_2 = sky_moment_returner(n_order=2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth, k1=self.k1,
+                                   gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
+        x, y = mwa_dipole_locations(dx=dx)
+
+        nn1, nn2 = numpy.meshgrid(nu, nu)
+        xx = (numpy.meshgrid(x, x, x, x, indexing="ij"))
+        yy = (numpy.meshgrid(y, y, y, y, indexing="ij"))
+
+        dxx = (xx[0] - xx[1], xx[2] - xx[3])
+        dyy = (yy[0] - yy[1], yy[2] - yy[3])
+        index, i_index, j_index = covariance_indexing(nu)
+
+        self.matrix = numpy.zeros((len(u), len(nu), len(nu)))
+        self.u = u
+        self.nu = nu
+
+        for k in range(len(u)):
+            pool = multiprocessing.Pool(4)
+            output = numpy.array(
+            pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, gamma), index))
+            self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * mu_2 * output / dxx[0].shape[0] ** 4
+            self.matrix[k, j_index[index], i_index[index]] = covariance[i_index[index], j_index[index]]
+
+        return covariance
+
 
 
 def beam_covariance_pab(u, v, nu, model_limit = 0.1, S_low=1e-5, S_mid=1., S_high=10., gamma=0.8, mode = 'frequency',
