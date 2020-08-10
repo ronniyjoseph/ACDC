@@ -10,19 +10,34 @@ from pyrem.radiotelescope import beam_width
 
 
 class Covariance:
-    def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8):
+    def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8, model_depth = None):
         self.gamma = gamma
         self.s_low = s_low
         self.s_mid = s_mid
         self.s_high = s_high
         self.model_depth = None
-        self.matrix = None
+        self.matrix = model_depth
         return
+
+    def __add__(self, other):
+        total_covariance = Covariance()
+        ### check whether all parameters are the same
+        total_covariance.matrix = self.matrix + other.matrix
 
     def compute_covariance(self, u, v, nu, mode = 'frequency'):
 
         return covariance
 
+
+    def compute_power():
+        n_u_scales = self.matrix.shape[0]
+        n_nu_channels = self.matrix.shape[1]
+        variance = numpy.zeros((n_u_scales, int(n_nu_channels/2)))
+
+        for i in range(len(n_u_scales)):
+            variance[i, :] = compute_power(nu, self.matrix[i,...])
+
+        return power
     def compute_beam_covariance(self, u, v, nu, mode = 'frequency'):
         return covariance
 
@@ -106,7 +121,7 @@ def position_covariance_pab(u, v, nu, S_low=1e-3, S_mid=1., S_high=10., gamma=0.
 
     pool = multiprocessing.Pool(4)
     output = numpy.array(
-        pool.map(partial(covariance_kernels2, u, v, nn1.flatten(), nn2.flatten(), dxx, dyy, gamma), index))
+        pool.map(partial(derivative_kernels, u, v, nn1.flatten(), nn2.flatten(), dxx, dyy, gamma), index))
     covariance = numpy.zeros((len(nu), len(nu)))
     covariance[i_index[index], j_index[index]] = 16 * delta_u**2*numpy.pi**3 * mu_2 * output / dxx[0].shape[0] ** 4
     covariance[j_index[index], i_index[index]] = covariance[i_index[index], j_index[index]]
@@ -136,7 +151,7 @@ def covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     return covariance
 
 
-def covariance_kernels2(u, v, nn1, nn2, dxx, dyy, gamma, i):
+def derivative_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     datatype = numpy.float64
     nu0 = nn2[0].astype(dtype=datatype)
     nu1 = nn1[i].astype(dtype=datatype)
