@@ -7,6 +7,7 @@ from scipy import signal
 from pyrem.skymodel import sky_moment_returner
 from pyrem.radiotelescope import mwa_dipole_locations
 from pyrem.radiotelescope import beam_width
+from pyrem.powerspectrum import compute_power
 
 
 class Covariance:
@@ -40,10 +41,10 @@ class Covariance:
         n_nu_channels = self.matrix.shape[1]
         variance = numpy.zeros((n_u_scales, int(n_nu_channels/2)))
 
-        for i in range(len(n_u_scales)):
-            variance[i, :] = compute_power(nu, self.matrix[i,...])
+        for i in range(n_u_scales):
+            variance[i, :] = compute_power(self.nu, self.matrix[i,...])
 
-        return power
+        return variance
 
 
     def setup_computation(self):
@@ -85,7 +86,7 @@ class SkyCovariance(Covariance):
             self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * mu_2 * output / dxx[0].shape[0] ** 4
             self.matrix[k, j_index[index], i_index[index]] = self.matrix[k, i_index[index], j_index[index]]
 
-        return self.matrix
+        return
 
 
 class BeamCovariance(Covariance):
@@ -143,6 +144,49 @@ class BeamCovariance(Covariance):
             self.matrix[k, j_index[index], i_index[index]] = self.matrix[k,i_index[index], j_index[index]]
 
         return self.matrix
+
+
+class PositionCovariance(Covariance):
+    def __init__(self, position_precision = None, **kwargs):
+        self.position_precision = position_precision
+
+        assert self.position_precision is not None, "Specify a antenna position precision by setting 'position_precision'"
+        super(PositionCovariance, self).__init__(**kwargs)
+
+
+    def compute_covariance(self, u, v, nu):
+
+        mu_2 = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.s_high, k1 = self.k1,
+                                   gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
+        delta_u = self.position_precision * nu[0] / c
+
+        x, y = mwa_dipole_locations(dx=1.1)
+
+        nn1, nn2 = numpy.meshgrid(nu, nu)
+        xx = (numpy.meshgrid(x, x, x, x, indexing="ij"))
+        yy = (numpy.meshgrid(y, y, y, y, indexing="ij"))
+
+        dxx = (xx[0] - xx[1], xx[2] - xx[3])
+        dyy = (yy[0] - yy[1], yy[2] - yy[3])
+        index, i_index, j_index = covariance_indexing(nu)
+
+        self.matrix = numpy.zeros((len(u), len(nu), len(nu)))
+        self.u = u
+        self.nu = nu
+        for k in range(len(u)):
+            pool = multiprocessing.Pool(4)
+            output = numpy.array(
+                pool.map(partial(derivative_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+
+            self.matrix[k,i_index[index], j_index[index]] = 16 * delta_u ** 2 * numpy.pi ** 3 * mu_2 * output / \
+                                                            dxx[0].shape[0] ** 4
+            self.matrix[k, j_index[index], i_index[index]] = self.matrix[k, i_index[index], j_index[index]]
+            self.matrix[k,...] *= (nn1 * nn2 / nu[0] ** 2)
+        return self.matrix
+
+
+
+
 
 def beam_covariance_pab(u, v, nu, model_limit = 0.1, S_low=1e-5, S_mid=1., S_high=10., gamma=0.8, mode = 'frequency',
                         nu_0 = 150e6, dx=1.1, calibration_type = 'sky'):
