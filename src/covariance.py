@@ -107,7 +107,7 @@ class SkyCovariance(Covariance):
 
 class BeamCovariance(Covariance):
 
-    def __init__(self, model_depth = None, calibration_type=None, broken_fraction=1 **kwargs):
+    def __init__(self, model_depth = None, calibration_type=None, broken_fraction=1, **kwargs):
         self.model_depth = model_depth
         self.calibration_type = calibration_type
         self.broken_fraction = broken_fraction
