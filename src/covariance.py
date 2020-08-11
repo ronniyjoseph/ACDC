@@ -152,8 +152,8 @@ class BeamCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             kernel_A = numpy.array(
                 pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
-            pool.close()
             self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * (mu_2_m + mu_2_r) * kernel_A / dxx[0].shape[0] ** 5
+            pool.close()
 
             if self.calibration_type == 'sky':
                 xx = (numpy.meshgrid(x, x, x, x, indexing="ij"))
@@ -163,10 +163,11 @@ class BeamCovariance(Covariance):
                 pool = multiprocessing.Pool(4)
                 kernel_B = numpy.array(
                     pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
-                self.matrix[k,i_index[index], j_index[index]] += -4 * numpy.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
+                self.matrix[k, i_index[index], j_index[index]] += -4 * numpy.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
                 pool.close()
-            self.matrix[k, j_index[index], i_index[index]] = self.matrix[k,i_index[index], j_index[index]]
-            self.matrix *= self.broken_fraction**2
+
+            self.matrix[k, j_index[index], i_index[index]] = self.matrix[k, i_index[index], j_index[index]]
+        self.matrix *= self.broken_fraction**2
         return self.matrix
 
 
