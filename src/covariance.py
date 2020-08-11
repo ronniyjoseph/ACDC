@@ -53,6 +53,8 @@ class Covariance:
 
 
     def compute_power(self):
+        print("Computing Power Spectrum Contamination")
+
         n_u_scales = self.matrix.shape[0]
         n_nu_channels = self.matrix.shape[1]
         variance = numpy.zeros((n_u_scales, int(n_nu_channels/2)))
@@ -79,6 +81,8 @@ class SkyCovariance(Covariance):
 
 
     def compute_covariance(self, u, v, nu):
+        print("Computing Sky Covariance Matrix")
+
         mu_2 = sky_moment_returner(n_order=2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth, k1=self.k1,
                                    gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
         x, y = mwa_dipole_locations(dx=1.1)
@@ -99,6 +103,8 @@ class SkyCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             output = numpy.array(
             pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+            pool.close()
+
             self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * mu_2 * output / dxx[0].shape[0] ** 4
             self.matrix[k, j_index[index], i_index[index]] = self.matrix[k, i_index[index], j_index[index]]
 
@@ -118,7 +124,7 @@ class BeamCovariance(Covariance):
 
 
     def compute_covariance(self, u, v, nu):
-
+        print("Computing Beam Covariance Matrix")
         mu_1_r = sky_moment_returner(1, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
                                    gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
         mu_2_r = sky_moment_returner(2, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
@@ -146,6 +152,7 @@ class BeamCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             kernel_A = numpy.array(
                 pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+            pool.close()
             self.matrix[k, i_index[index], j_index[index]] = 2 * numpy.pi * (mu_2_m + mu_2_r) * kernel_A / dxx[0].shape[0] ** 5
 
             if self.calibration_type == 'sky':
@@ -153,10 +160,11 @@ class BeamCovariance(Covariance):
                 yy = (numpy.meshgrid(y, y, y, y, indexing="ij"))
                 dxx = (xx[2] - xx[0], xx[1] - xx[3])
                 dyy = (yy[2] - yy[0], yy[1] - yy[3])
+                pool = multiprocessing.Pool(4)
                 kernel_B = numpy.array(
                     pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
                 self.matrix[k,i_index[index], j_index[index]] += -4 * numpy.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
-
+                pool.close()
             self.matrix[k, j_index[index], i_index[index]] = self.matrix[k,i_index[index], j_index[index]]
             self.matrix *= self.broken_fraction**2
         return self.matrix
@@ -171,6 +179,7 @@ class PositionCovariance(Covariance):
 
 
     def compute_covariance(self, u, v, nu):
+        print("Computing Position Covariance Matrix")
 
         mu_2 = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.s_high, k1 = self.k1,
                                    gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
@@ -193,6 +202,7 @@ class PositionCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             output = numpy.array(
                 pool.map(partial(derivative_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+            pool.close()
 
             self.matrix[k,i_index[index], j_index[index]] = 16 * delta_u ** 2 * numpy.pi ** 3 * mu_2 * output / \
                                                             dxx[0].shape[0] ** 4
