@@ -107,10 +107,10 @@ class SkyCovariance(Covariance):
 
 class BeamCovariance(Covariance):
 
-    def __init__(self, model_depth = None, calibration_type=None, **kwargs):
+    def __init__(self, model_depth = None, calibration_type=None, broken_fraction=1 **kwargs):
         self.model_depth = model_depth
         self.calibration_type = calibration_type
-
+        self.broken_fraction = broken_fraction
         assert self.model_depth is not None, "Specify a sky model catalogue depth by setting 'model_depth'"
         assert self.calibration_type is not None, "Specify a sky model catalogue depth by setting 'calibration_type' to" \
                                                   "'sky' or 'redundant'"
@@ -158,7 +158,7 @@ class BeamCovariance(Covariance):
                 self.matrix[k,i_index[index], j_index[index]] += -4 * numpy.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
 
             self.matrix[k, j_index[index], i_index[index]] = self.matrix[k,i_index[index], j_index[index]]
-
+            self.matrix *= self.broken_fraction**2
         return self.matrix
 
 
