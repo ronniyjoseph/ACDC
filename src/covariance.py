@@ -29,11 +29,27 @@ class Covariance:
         return
 
 
-    # def __add__(self, other):
-    #     total_covariance = Covariance()
-        ## check whether all parameters are the same
-        # total_covariance.matrix = self.matrix + other.matrix
-        # return total_covariance
+    def __add__(self, other):
+        # check whether all parameters are the same
+        assert self.matrix is not None, "Please compute a covariance matrix using compute_covariance"
+        assert other.matrix is not None, "Please compute a covariance matrix using compute covariance"
+
+        assert numpy.array_equal(self.nu, other.nu)
+        assert numpy.array_equal(self.u, other.u)
+        assert self.gamma == other.gamma
+        assert self.s_low == other.s_low                      #Lowest Brightness sources
+        assert self.s_mid == other.s_mid                      #Midpoint Brightness Source Counts
+        assert self.s_high == other.s_high                    #Maximum Brightness Source Counts
+        assert self.alpha1 == other.alpha1                    #Source Count Slope
+        assert self.alpha2 == other.alpha2                    #Source Count Slope
+        assert self.k1 == other.k1                            #Source Count Normalisation
+        assert self.k2 == other.k2
+
+        total_covariance = Covariance()
+        total_covariance.matrix = self.matrix + other.matrix
+        total_covariance.nu = self.nu
+        total_covariance.u = self.u
+        return total_covariance
 
 
     def compute_power(self):
