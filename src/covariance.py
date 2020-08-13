@@ -73,10 +73,7 @@ class SkyCovariance(Covariance):
 
     def __init__(self, model_depth = None, **kwargs):
         self.model_depth = model_depth
-
         assert self.model_depth is not None, "Specify a sky model catalogue depth by setting 'model_depth'"
-
-
         super(SkyCovariance, self).__init__(**kwargs)
 
 
@@ -208,8 +205,53 @@ class PositionCovariance(Covariance):
             self.matrix[k,i_index[index], j_index[index]] = 16 * delta_u ** 2 * numpy.pi ** 3 * mu_2 * output / \
                                                             dxx[0].shape[0] ** 4
             self.matrix[k, j_index[index], i_index[index]] = self.matrix[k, i_index[index], j_index[index]]
-            self.matrix[k,...] *= (nn1 * nn2 / nu[0] ** 2)
         return self.matrix
+
+
+class GainCovariance(Covariance):
+
+    def __init__(self, residual_covariance):
+        super().__init__(self)
+        self.residual_matrix = residual_covariance.matrix                      #Place Holder for Covariance Computation
+        self.nu = residual_covariance.nu                        #Place Holder for Frequency array
+        self.u = residual_covariance.u                           #Place Holder for baseline lengths
+        self.gamma = residual_covariance.gamma                      #Radio Spectral Energy Distribution Power Law Index
+        self.model_depth = residual_covariance.model_depth
+
+        self.s_low = residual_covariance.s_low                      #Lowest Brightness sources
+        self.s_mid = residual_covariance.s_mid                      #Midpoint Brightness Source Counts
+        self.s_high = residual_covariance.s_high                    #Maximum Brightness Source Counts
+        self.alpha1 = residual_covariance.alpha1                    #Source Count Slope
+        self.alpha2 = residual_covariance.alpha2                    #Source Count Slope
+        self.k1 = residual_covariance.k1                            #Source Count Normalisation
+        self.k2 = residual_covariance.k2
+
+        return
+
+    def compute_covariance(self, calibration_type = None, baseline_table=None):
+
+        if calibration_type == "sky" or calibration_type == 'absolute':
+            model_variance = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth,
+                                                 k1 = self.k1, gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
+        elif calibration_type == "relative":
+            model_variance = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.s_high,
+                                                 k1 = self.k1, gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
+        else:
+            raise ValueError("Specify calibration_type= to 'sky' or 'relative")
+
+        self.residual_matrix /= model_variance
+
+        if baseline_table is None:
+            n_parameters = calibration_parameter_number(baseline_table, calibration_type)
+            self.matrix = numpy.sum(self.residual_matrix, axis=0) * (1 / (n_parameters * len(self.u))) ** 2
+        else:
+            self.matrix = numpy.zeros_like(self.residual_matrix)
+
+            for k in range(len(self.u)):
+                weights = compute_weights(self.u, baseline_table, calibration_type)
+                u_weight_reshaped = numpy.tile(weights[k, :].flatten(), (len(self.nu), len(self.nu), 1)).T
+                self.matrix[k, ...] = numpy.sum(self.residual_matrix * u_weight_reshaped, axis=0)
+        return
 
 
 def covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
@@ -251,7 +293,7 @@ def derivative_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     b = v * (nu1 - nu2) / nu0 + dyy[0].astype(dtype=datatype) * nu1 / c + dyy[1].astype(dtype=datatype) * nu2 / c
 
     kernels =  (1- 2*numpy.pi**2 * sigma_taper * (a**2 + b**2))*numpy.exp(-2 * numpy.pi**2 * sigma_taper * (a**2 + b**2))
-    covariance = numpy.sum(sigma_nu*(nu1 * nu2/nu0 ** 2) ** (-gamma) * kernels)
+    covariance = numpy.sum(sigma_nu*(nu1 * nu2/nu0 ** 2) ** (1-gamma) * kernels)
 
     return covariance
 
@@ -281,3 +323,26 @@ def kernel_index(xx):
     index = index[index > 0]
     index = numpy.concatenate((numpy.array([0]), index))
     return index, i_index, j_index
+
+
+def compute_weights(u_bins, baseline_table, calibration_type = None):
+    n_parameters = calibration_parameter_number(baseline_table, calibration_type)
+    u_bin_edges = numpy.zeros(len(u_bins) + 1)
+    baseline_lengths = numpy.sqrt(baseline_table.u**2 + baseline_table.v**2)
+    log_steps = numpy.diff(numpy.log10(u_bins))
+    u_bin_edges[1:] = 10**(numpy.log10(u_bins) + 0.5*log_steps[0])
+    u_bin_edges[0] = 10**(numpy.log10(u_bins[0] - 0.5*log_steps[0]))
+    counts, bin_edges = numpy.histogram(baseline_lengths, bins=u_bin_edges)
+
+    weight_approx = n_parameters / len(baseline_lengths) / counts
+    prime, unprime = numpy.meshgrid(weight_approx, weight_approx)
+    weights = prime * unprime
+    return weights
+
+
+def calibration_parameter_number(baseline_table, calibration_type):
+    calibration_param_number= len(numpy.unique([baseline_table.antenna1, baseline_table.antenna2]))
+    if calibration_type == 'relative':
+        calibration_param_number += len(numpy.unique(baseline_table.group_indices))
+
+    return calibration_param_number
