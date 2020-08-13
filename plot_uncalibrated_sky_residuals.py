@@ -8,11 +8,11 @@ from pyrem.powerspectrum import from_frequency_to_eta
 from pyrem.plottools import plot_2dpower_spectrum
 
 
-def main(labelfontsize = 16, ticksize= 11):
+def main(labelfontsize = 20, ticksize= 15):
     model_limit = 100e-3
     broken_fraction = 0.25
     u_range = numpy.logspace(-1, numpy.log10(500), 100)
-    frequency_range = numpy.linspace(135, 165, 251) * 1e6
+    frequency_range = numpy.linspace(135, 165, 251 )* 1e6
     eta = from_frequency_to_eta(frequency_range)
 
     sky_covariance = SkyCovariance(model_depth=model_limit)
@@ -23,6 +23,7 @@ def main(labelfontsize = 16, ticksize= 11):
     sky_error_power = sky_covariance.compute_power()
     beam_error_power = beam_covariance.compute_power()
     total_error_power = sky_error_power + beam_error_power
+
 
     figure, axes = pyplot.subplots(1, 3, figsize=(15, 5))
 
@@ -42,7 +43,6 @@ def main(labelfontsize = 16, ticksize= 11):
 
     figure.tight_layout()
     figure.savefig("../plots/Uncalibrated_sky_residuals.pdf")
-    pyplot.show()
 
     return
 
