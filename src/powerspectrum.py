@@ -66,7 +66,7 @@ def interpolate(u, eta, u_original, eta_original, ps_data):
     return fully_interpolated
 
 
-def fiducial_eor_power_spectrum(u, eta, path = "./Data/"
+def fiducial_eor_power_spectrum(u, eta, path = "./data/"
                  , file = "redshift8.csv"):
     u_fiducial, eta_fiducial, ps_fiducial = read_data(path + file)
     ps_interpolated = interpolate(u, eta, u_fiducial, eta_fiducial, ps_fiducial)
