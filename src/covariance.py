@@ -92,7 +92,6 @@ class SkyCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             output = np.array(pool.map(partial(
                     pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
-
             pool.close()
 
             self.matrix[k, i_index[index], j_index[index]] = 2 * np.pi * mu_2 * output / dxx[0].shape[0] ** 4
@@ -207,7 +206,7 @@ class GainCovariance(Covariance):
         for k, v in residual_covariance.__dict__.items():
             self.__dict__[k] = copy.deepcopy(v)
 
-        self.residual_matrix = residual_covariance.matrix                      #Place Holder for Covariance Computation
+        self.residual_matrix = copy.deepcopy(residual_covariance.matrix)
         self.compute_covariance(calibration_type = calibration_type, baseline_table=baseline_table,
                                 n_parameters = n_parameters)
         return
@@ -252,11 +251,11 @@ class CalibratedResiduals(Covariance):
         assert self.model_depth is not None, "Set peeling limit through 'model_limit'"
         self.gain_matrix = gaincovariance.matrix
         if model_matrix is not None:
-            self.model_matrix = model_matrix.matrix
+            self.model_matrix = copy.deepcopy(model_matrix.matrix)
         else:
             self.model_matrix = model_matrix
         if residual_matrix is not None:
-            self.residual_matrix = residual_matrix.matrix
+            self.residual_matrix = copy.deepcopy(residual_matrix.matrix)
         else:
             self.model_matrix = model_matrix
         self.compute_covariance()
@@ -277,7 +276,6 @@ class CalibratedResiduals(Covariance):
             self.model_matrix = modeled_sky_covariance.matrix * modeled_mu/unmodeled_mu
 
         self.matrix = 2*self.gain_matrix*self.model_matrix + (1 + 2*self.gain_matrix)*self.residual_matrix
-
         return
 
 def pab_covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
@@ -360,11 +358,14 @@ def compute_weights(u_bins, baseline_table, calibration_type = None):
     u_bin_edges[1:] = 10**(np.log10(u_bins) + 0.5*log_steps[0])
     u_bin_edges[0] = 10**(np.log10(u_bins[0] - 0.5*log_steps[0]))
     counts, bin_edges = np.histogram(baseline_lengths, bins=u_bin_edges)
-
     weight_approx = n_parameters / len(baseline_lengths) / counts
     prime, unprime = np.meshgrid(weight_approx, weight_approx)
     weights = prime * unprime
     weights[np.isinf(weights)] = 0
+
+    from matplotlib import pyplot
+    pyplot.imshow(np.log10(weights))
+    pyplot.show()
     return weights
 
 
