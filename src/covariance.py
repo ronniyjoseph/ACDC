@@ -115,15 +115,8 @@ class BeamCovariance(Covariance):
 
     def compute_covariance(self, u, v, nu):
         print("Computing Beam Covariance Matrix")
-        mu_1_r = sky_moment_returner(1, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
-                                   gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
-        mu_2_r = sky_moment_returner(2, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
-                                   gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
-
-        mu_1_m = sky_moment_returner(1, s_low=self.model_depth, s_mid = self.s_mid, s_high=self.s_high, k1 = self.k1,
-        gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
-        mu_2_m = sky_moment_returner(2, s_low=self.model_depth, s_mid = self.s_mid, s_high=self.s_high, k1 = self.k1,
-        gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
+        mu_2 = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.s_high, k1=self.k1,
+                                     gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
 
         x, y = mwa_dipole_locations(dx=1.1)
         nn1, nn2 = np.meshgrid(nu, nu)
@@ -142,10 +135,12 @@ class BeamCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             kernel_A = np.array(
                 pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
-            self.matrix[k, i_index[index], j_index[index]] = 2 * np.pi * (mu_2_m + mu_2_r) * kernel_A / dxx[0].shape[0] ** 5
+            self.matrix[k, i_index[index], j_index[index]] = 2 * np.pi * mu_2 * kernel_A / dxx[0].shape[0] ** 5
             pool.close()
 
             if self.calibration_type == 'sky':
+                mu_2_r = sky_moment_returner(2, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
+                                             gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
                 xx = (np.meshgrid(x, x, x, x, indexing="ij"))
                 yy = (np.meshgrid(y, y, y, y, indexing="ij"))
                 dxx = (xx[2] - xx[0], xx[1] - xx[3])
