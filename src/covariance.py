@@ -66,11 +66,15 @@ class SkyCovariance(Covariance):
         super(SkyCovariance, self).__init__(**kwargs)
         self.calibration_type = "sky"
         self.model_depth = model_depth
-        assert self.model_depth is not None, "Specify a sky model catalogue depth by setting 'model_depth'"
-
+        if self.model_depth is None:
+            self.model_depth = self.s_high
 
     def compute_covariance(self, u, v, nu):
         print("Computing Sky Covariance Matrix")
+
+        self.matrix = np.zeros((len(u), len(nu), len(nu)))
+        self.u = u
+        self.nu = nu
 
         mu_2 = sky_moment_returner(n_order=2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth, k1=self.k1,
                                    gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
@@ -84,14 +88,11 @@ class SkyCovariance(Covariance):
         dyy = (yy[0] - yy[1], yy[2] - yy[3])
         index, i_index, j_index = covariance_indexing(nu)
 
-        self.matrix = np.zeros((len(u), len(nu), len(nu)))
-        self.u = u
-        self.nu = nu
-
         for k in range(len(u)):
             pool = multiprocessing.Pool(4)
-            output = np.array(
-            pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+            output = np.array(pool.map(partial(
+                    pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+
             pool.close()
 
             self.matrix[k, i_index[index], j_index[index]] = 2 * np.pi * mu_2 * output / dxx[0].shape[0] ** 4
@@ -131,10 +132,11 @@ class BeamCovariance(Covariance):
         self.u = u
         self.nu = nu
 
+
         for k in range(len(u)):
             pool = multiprocessing.Pool(4)
             kernel_A = np.array(
-                pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+                pool.map(partial(pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
             self.matrix[k, i_index[index], j_index[index]] = 2 * np.pi * mu_2 * kernel_A / dxx[0].shape[0] ** 5
             pool.close()
 
@@ -147,7 +149,7 @@ class BeamCovariance(Covariance):
                 dyy = (yy[2] - yy[0], yy[1] - yy[3])
                 pool = multiprocessing.Pool(4)
                 kernel_B = np.array(
-                    pool.map(partial(covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+                    pool.map(partial(pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
                 self.matrix[k, i_index[index], j_index[index]] += -4 * np.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
                 pool.close()
 
@@ -161,7 +163,7 @@ class PositionCovariance(Covariance):
         super(PositionCovariance, self).__init__(**kwargs)
         self.calibration_type = "relative"
         self.position_precision = position_precision
-
+        assert self.beam_model is not None, "Specify a beam model by setting 'position_precision' to 'gaus' or 'phased'"
         assert self.position_precision is not None, "Specify a antenna position precision by setting 'position_precision'"
 
 
@@ -185,10 +187,11 @@ class PositionCovariance(Covariance):
         self.matrix = np.zeros((len(u), len(nu), len(nu)))
         self.u = u
         self.nu = nu
+
         for k in range(len(u)):
             pool = multiprocessing.Pool(4)
-            output = np.array(
-                pool.map(partial(derivative_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+            output = np.array(pool.map(partial(
+                pab_derivative_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
             pool.close()
 
             self.matrix[k,i_index[index], j_index[index]] = 16 * delta_u ** 2 * np.pi ** 3 * mu_2 * output / \
@@ -226,7 +229,6 @@ class GainCovariance(Covariance):
             self.matrix = np.sum(self.residual_matrix, axis=0) * (1 / (n_parameters * len(self.u))) ** 2
         else:
             weights = compute_weights(self.u, baseline_table, calibration_type)
-            print(weights)
             self.matrix = np.zeros_like(self.residual_matrix)
             for k in range(len(self.u)):
                 u_weight_reshaped = np.tile(weights[k, :].flatten(), (len(self.nu), len(self.nu), 1)).T
@@ -242,31 +244,43 @@ class GainCovariance(Covariance):
 
 class CalibratedResiduals(Covariance):
 
-    def __init__(self, gaincovariance, model_limit = None):
+    def __init__(self, gaincovariance, model_limit=None, model_matrix = None, residual_matrix = None):
         super().__init__(self)
-        self.model_limit = model_limit
+        self.model_depth = model_limit
         for k, v in gaincovariance.__dict__.items():
             self.__dict__[k] = copy.deepcopy(v)
-        assert self.model_limit is not None, "Set peeling limit through 'model_limit'"
+        assert self.model_depth is not None, "Set peeling limit through 'model_limit'"
         self.gain_matrix = gaincovariance.matrix
+        if model_matrix is not None:
+            self.model_matrix = model_matrix.matrix
+        else:
+            self.model_matrix = model_matrix
+        if residual_matrix is not None:
+            self.residual_matrix = residual_matrix.matrix
+        else:
+            self.model_matrix = model_matrix
         self.compute_covariance()
         return
 
     def compute_covariance(self):
-        unmodeled_sky_covariance = SkyCovariance(model_depth=self.model_limit)
-        unmodeled_sky_covariance.compute_covariance(u=self.u, v = 0, nu=self.nu)
-        unmodeled_mu = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_limit, k1=self.k1,
+        if self.residual_matrix is None:
+            unmodeled_sky_covariance = SkyCovariance(model_depth=self.model_depth)
+            unmodeled_sky_covariance.compute_covariance(u=self.u, v = 0, nu=self.nu)
+            self.residual_matrix = unmodeled_sky_covariance.matrix
+        if self.model_matrix is None:
+            modeled_sky_covariance = SkyCovariance(model_depth=self.model_depth)
+            modeled_sky_covariance.compute_covariance(u=self.u, v = 0, nu=self.nu)
+            unmodeled_mu = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth, k1=self.k1,
                                      gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
-        modeled_mu = sky_moment_returner(2, s_low=self.model_limit, s_mid=self.s_mid, s_high=self.s_high, k1=self.k1,
+            modeled_mu = sky_moment_returner(2, s_low=self.model_depth, s_mid=self.s_mid, s_high=self.s_high, k1=self.k1,
                                      gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
-        modeled_sky_covariance = copy.deepcopy(unmodeled_sky_covariance)
-        modeled_sky_covariance.matrix *= modeled_mu/unmodeled_mu
-        print(self.gain_matrix)
-        self.matrix = 2*self.gain_matrix*modeled_sky_covariance.matrix + (1 + 2*self.gain_matrix)*unmodeled_sky_covariance.matrix
+            self.model_matrix = modeled_sky_covariance.matrix * modeled_mu/unmodeled_mu
+
+        self.matrix = 2*self.gain_matrix*self.model_matrix + (1 + 2*self.gain_matrix)*self.residual_matrix
 
         return
 
-def covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
+def pab_covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     datatype = np.float64
     nu0 = nn2[0].astype(dtype=datatype)
     nu1 = nn1[i].astype(dtype=datatype)
@@ -288,7 +302,7 @@ def covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     return covariance
 
 
-def derivative_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
+def pab_derivative_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     datatype = np.float64
     nu0 = nn2[0].astype(dtype=datatype)
     nu1 = nn1[i].astype(dtype=datatype)
@@ -308,6 +322,7 @@ def derivative_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     covariance = np.sum(sigma_nu*(nu1 * nu2/nu0 ** 2) ** (1-gamma) * kernels)
 
     return covariance
+
 
 
 def covariance_indexing(nu):
