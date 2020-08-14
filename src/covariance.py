@@ -199,17 +199,17 @@ class PositionCovariance(Covariance):
 
 class GainCovariance(Covariance):
 
-    def __init__(self, residual_covariance, calibration_type = None, baseline_table = None):
+    def __init__(self, residual_covariance, calibration_type = None, baseline_table = None, n_parameters = None):
         super().__init__(self)
         for k, v in residual_covariance.__dict__.items():
             self.__dict__[k] = copy.deepcopy(v)
 
         self.residual_matrix = residual_covariance.matrix                      #Place Holder for Covariance Computation
-
-        self.compute_covariance(calibration_type = calibration_type, baseline_table=baseline_table)
+        self.compute_covariance(calibration_type = calibration_type, baseline_table=baseline_table,
+                                n_parameters = n_parameters)
         return
 
-    def compute_covariance(self, calibration_type = None, baseline_table=None):
+    def compute_covariance(self, calibration_type = None, baseline_table=None, n_parameters = None):
 
         if calibration_type == "sky" or calibration_type == 'absolute':
             model_variance = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth,
@@ -221,12 +221,12 @@ class GainCovariance(Covariance):
             raise ValueError("Specify calibration_type= to 'sky' or 'relative")
 
         self.residual_matrix /= model_variance
-
         if baseline_table is None:
-            n_parameters = calibration_parameter_number(baseline_table, calibration_type)
+            assert n_parameters is not None, "Specifice calibration parameter number"
             self.matrix = np.sum(self.residual_matrix, axis=0) * (1 / (n_parameters * len(self.u))) ** 2
         else:
             weights = compute_weights(self.u, baseline_table, calibration_type)
+            print(weights)
             self.matrix = np.zeros_like(self.residual_matrix)
             for k in range(len(self.u)):
                 u_weight_reshaped = np.tile(weights[k, :].flatten(), (len(self.nu), len(self.nu), 1)).T
@@ -242,7 +242,27 @@ class GainCovariance(Covariance):
 
 class CalibratedResiduals(Covariance):
 
-    def __init__(self, gaincovariance):
+    def __init__(self, gaincovariance, model_limit = None):
+        super().__init__(self)
+        self.model_limit = model_limit
+        for k, v in gaincovariance.__dict__.items():
+            self.__dict__[k] = copy.deepcopy(v)
+        assert self.model_limit is not None, "Set peeling limit through 'model_limit'"
+        self.gain_matrix = gaincovariance.matrix
+        self.compute_covariance()
+        return
+
+    def compute_covariance(self):
+        unmodeled_sky_covariance = SkyCovariance(model_depth=self.model_limit)
+        unmodeled_sky_covariance.compute_covariance(u=self.u, v = 0, nu=self.nu)
+        unmodeled_mu = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_limit, k1=self.k1,
+                                     gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
+        modeled_mu = sky_moment_returner(2, s_low=self.model_limit, s_mid=self.s_mid, s_high=self.s_high, k1=self.k1,
+                                     gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
+        modeled_sky_covariance = copy.deepcopy(unmodeled_sky_covariance)
+        modeled_sky_covariance.matrix *= modeled_mu/unmodeled_mu
+        print(self.gain_matrix)
+        self.matrix = 2*self.gain_matrix*modeled_sky_covariance.matrix + (1 + 2*self.gain_matrix)*unmodeled_sky_covariance.matrix
 
         return
 
@@ -329,6 +349,7 @@ def compute_weights(u_bins, baseline_table, calibration_type = None):
     weight_approx = n_parameters / len(baseline_lengths) / counts
     prime, unprime = np.meshgrid(weight_approx, weight_approx)
     weights = prime * unprime
+    weights[np.isinf(weights)] = 0
     return weights
 
 
