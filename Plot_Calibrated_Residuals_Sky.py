@@ -1,13 +1,14 @@
 import numpy
 import argparse
 import copy
+import time
 from matplotlib import colors
 
 from src.covariance import SkyCovariance
 from src.covariance import BeamCovariance
 from src.covariance import GainCovariance
 from src.covariance import CalibratedResiduals
-
+from src.covariance import compute_weights
 from pyrem.skymodel import sky_moment_returner
 from pyrem.powerspectrum import from_frequency_to_eta
 from pyrem.plottools import plot_2dpower_spectrum
@@ -22,7 +23,6 @@ from pyrem.plottools import plot_power_contours
 from pyrem.generaltools import from_jansky_to_milikelvin
 
 from pyrem.covariance import calibrated_residual_error
-from pyrem.covariance import compute_weights
 
 from pyrem.util import redundant_baseline_finder
 
@@ -31,14 +31,14 @@ def main(labelfontsize = 20, ticksize= 15):
     broken_fraction = 0.25
     telescope_position_path = "./data/MWA_Compact_Coordinates.txt"
 
-    u_range = numpy.logspace(-1, numpy.log10(300), 100)
-    frequency_range = numpy.linspace(135, 165, 50 )* 1e6
+    u_range = numpy.logspace(-1, numpy.log10(500), 100)
+    frequency_range = numpy.linspace(135, 165, 251 )* 1e6
     eta = from_frequency_to_eta(frequency_range)
 
     eor_power_spectrum = fiducial_eor_power_spectrum(u_range, eta)
 
     telescope = RadioTelescope(load=True, path=telescope_position_path)
-    redundant_table = telescope.baseline_table
+    redundant_table = redundant_baseline_finder(telescope.baseline_table)
 
     sky_covariance = SkyCovariance(model_depth=model_limit)
     sky_covariance.compute_covariance(u=u_range, v = 0, nu=frequency_range)
@@ -68,7 +68,6 @@ def main(labelfontsize = 20, ticksize= 15):
     sky_power = sky_residuals.compute_power()
     beam_power = beam_residuals.compute_power()
     total_power = total_residuals.compute_power()
-
 
     sky_clocations = None# [(6e-2, 0.21), (4e-2, 0.13), (3e-2, 0.07 )]
     beam_clocations = sky_clocations
@@ -119,5 +118,7 @@ if __name__ == "__main__":
     if params.ssh_key:
         matplotlib.use("Agg")
     from matplotlib import pyplot
-
+    start = time.time()
     main()
+    end = time.time()
+    print(f"It took {end-start} seconds")
