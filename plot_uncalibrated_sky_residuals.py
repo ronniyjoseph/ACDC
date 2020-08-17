@@ -30,11 +30,11 @@ def main(labelfontsize = 20, ticksize= 15):
     ps_norm = colors.LogNorm(vmin=1e3, vmax=1e15)
 
     plot_2dpower_spectrum(u_range, eta, frequency_range, sky_error_power, title="Sky Model Error", axes=axes[0],
-                        axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=True,
+                        axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=False,
                         xlabel_show=True, norm=ps_norm, ylabel_show=True)
 
     plot_2dpower_spectrum(u_range, eta, frequency_range, beam_error_power, title="Beam Model Error", axes=axes[1],
-                        axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=True,
+                        axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=False,
                         xlabel_show=True, norm=ps_norm)
 
     plot_2dpower_spectrum(u_range, eta, frequency_range, total_error_power, title="Total Error", axes=axes[2],
