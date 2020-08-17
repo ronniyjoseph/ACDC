@@ -34,10 +34,16 @@ class Covariance:
     def __add__(self, other):
         # check whether all parameters are the same
         total_covariance = Covariance()
-        for k, v in self.__dict__.items():
-            if k != "matrix":
+        unique_attributes = set(list(self.__dict__.keys()) + list(other.__dict__.keys()))
+        for k in unique_attributes:
+            if self.__dict__.get(k) is None:
+                total_covariance.__dict__[k] = copy.deepcopy(other.__dict__[k])
+            elif other.__dict__.get(k) is None:
+                total_covariance.__dict__[k] = copy.deepcopy(self.__dict__[k])
+            elif k != "matrix":
+                print(self.__dict__.keys())
                 assert np.array_equal(self.__dict__[k],other.__dict__[k]), f"Cannot add matrices because {k} is not the same"
-            total_covariance.__dict__[k] = copy.deepcopy(v)
+                total_covariance.__dict__[k] = copy.deepcopy(self.__dict__[k])
         total_covariance.matrix = self.matrix + other.matrix
 
         return total_covariance
@@ -67,6 +73,7 @@ class SkyCovariance(Covariance):
         self.calibration_type = "sky"
         self.model_depth = model_depth
         if self.model_depth is None:
+            print("Warning computing the variance for all sources")
             self.model_depth = self.s_high
 
     def compute_covariance(self, u, v, nu):
@@ -162,7 +169,6 @@ class PositionCovariance(Covariance):
         super(PositionCovariance, self).__init__(**kwargs)
         self.calibration_type = "relative"
         self.position_precision = position_precision
-        assert self.beam_model is not None, "Specify a beam model by setting 'position_precision' to 'gaus' or 'phased'"
         assert self.position_precision is not None, "Specify a antenna position precision by setting 'position_precision'"
 
 
@@ -248,12 +254,13 @@ class CalibratedResiduals(Covariance):
         self.model_depth = model_limit
         for k, v in gaincovariance.__dict__.items():
             self.__dict__[k] = copy.deepcopy(v)
-        assert self.model_depth is not None, "Set peeling limit through 'model_limit'"
         self.gain_matrix = gaincovariance.matrix
         if model_matrix is not None:
             self.model_matrix = copy.deepcopy(model_matrix.matrix)
         else:
             self.model_matrix = model_matrix
+            assert self.model_depth is not None, "Set peeling limit through 'model_limit'"
+
         if residual_matrix is not None:
             self.residual_matrix = copy.deepcopy(residual_matrix.matrix)
         else:
@@ -277,6 +284,7 @@ class CalibratedResiduals(Covariance):
 
         self.matrix = 2*self.gain_matrix*self.model_matrix + (1 + 2*self.gain_matrix)*self.residual_matrix
         return
+
 
 def pab_covariance_kernels(u, v, nn1, nn2, dxx, dyy, gamma, i):
     datatype = np.float64
@@ -363,9 +371,6 @@ def compute_weights(u_bins, baseline_table, calibration_type = None):
     weights = prime * unprime
     weights[np.isinf(weights)] = 0
 
-    from matplotlib import pyplot
-    pyplot.imshow(np.log10(weights))
-    pyplot.show()
     return weights
 
 
