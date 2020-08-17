@@ -41,7 +41,6 @@ class Covariance:
             elif other.__dict__.get(k) is None:
                 total_covariance.__dict__[k] = copy.deepcopy(self.__dict__[k])
             elif k != "matrix":
-                print(self.__dict__.keys())
                 assert np.array_equal(self.__dict__[k],other.__dict__[k]), f"Cannot add matrices because {k} is not the same"
                 total_covariance.__dict__[k] = copy.deepcopy(self.__dict__[k])
         total_covariance.matrix = self.matrix + other.matrix
@@ -73,7 +72,7 @@ class SkyCovariance(Covariance):
         self.calibration_type = "sky"
         self.model_depth = model_depth
         if self.model_depth is None:
-            print("Warning computing the variance for all sources")
+            print("Warning computing the variance for full sky")
             self.model_depth = self.s_high
 
     def compute_covariance(self, u, v, nu):
