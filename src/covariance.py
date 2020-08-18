@@ -1,7 +1,7 @@
 import numpy as np
 import multiprocessing
 import copy
-
+import pickle
 from functools import partial
 from scipy.constants import c
 from scipy import signal
@@ -10,7 +10,6 @@ from pyrem.skymodel import sky_moment_returner
 from pyrem.radiotelescope import mwa_dipole_locations
 from pyrem.radiotelescope import beam_width
 from pyrem.powerspectrum import compute_power
-
 
 class Covariance:
     def __init__(self, s_low=1e-5, s_mid=1., s_high=10., gamma=0.8, alpha1 = 1.59, alpha2 = 2.5,
@@ -40,7 +39,7 @@ class Covariance:
                 total_covariance.__dict__[k] = copy.deepcopy(other.__dict__[k])
             elif other.__dict__.get(k) is None:
                 total_covariance.__dict__[k] = copy.deepcopy(self.__dict__[k])
-            elif k != "matrix":
+            elif k != "matrix" and k != "calibration_type" and k != "residual_matrix":
                 assert np.array_equal(self.__dict__[k],other.__dict__[k]), f"Cannot add matrices because {k} is not the same"
                 total_covariance.__dict__[k] = copy.deepcopy(self.__dict__[k])
         total_covariance.matrix = self.matrix + other.matrix
@@ -61,7 +60,10 @@ class Covariance:
         return variance
 
 
-    def setup_computation(self):
+    def save(self, filename):
+        file = open(filename + '.obj', 'wb')
+        pickle.dump(self, file, pickle.HIGHEST_PROTOCOL)
+        file.close()
         return
 
 
@@ -133,6 +135,12 @@ class BeamCovariance(Covariance):
         dxx = (xx[1] - xx[0], xx[0] - xx[2])
         dyy = (yy[1] - yy[0], yy[0] - yy[2])
 
+        if self.calibration_type == 'sky':
+            xx = (np.meshgrid(x, x, x, x, indexing="ij"))
+            yy = (np.meshgrid(y, y, y, y, indexing="ij"))
+            dxx_B = (xx[2] - xx[0], xx[1] - xx[3])
+            dyy_B = (yy[2] - yy[0], yy[1] - yy[3])
+
         self.matrix = np.zeros((len(u), len(nu), len(nu)))
         self.u = u
         self.nu = nu
@@ -142,19 +150,16 @@ class BeamCovariance(Covariance):
             pool = multiprocessing.Pool(4)
             kernel_A = np.array(
                 pool.map(partial(pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+
             self.matrix[k, i_index[index], j_index[index]] = 2 * np.pi * mu_2 * kernel_A / dxx[0].shape[0] ** 5
             pool.close()
 
             if self.calibration_type == 'sky':
                 mu_2_r = sky_moment_returner(2, s_high=self.model_depth, s_low=self.s_low, s_mid=self.s_mid, k1=self.k1,
                                              gamma1=self.alpha1, k2=self.k2, gamma2=self.alpha2)
-                xx = (np.meshgrid(x, x, x, x, indexing="ij"))
-                yy = (np.meshgrid(y, y, y, y, indexing="ij"))
-                dxx = (xx[2] - xx[0], xx[1] - xx[3])
-                dyy = (yy[2] - yy[0], yy[1] - yy[3])
                 pool = multiprocessing.Pool(4)
                 kernel_B = np.array(
-                    pool.map(partial(pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx, dyy, self.gamma), index))
+                    pool.map(partial(pab_covariance_kernels, u[k], v, nn1.flatten(), nn2.flatten(), dxx_B, dyy_B, self.gamma), index))
                 self.matrix[k, i_index[index], j_index[index]] += -4 * np.pi * mu_2_r * kernel_B / dxx[0].shape[0] ** 5
                 pool.close()
 
