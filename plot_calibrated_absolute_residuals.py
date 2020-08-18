@@ -80,9 +80,6 @@ def main(labelfontsize = 20, ticksize= 15):
     eor_power_spectrum = eor_power_spectrum[index,...]
 
     figure, axes = pyplot.subplots(1, 3, figsize=(15, 5))
-
-    ps_norm = colors.LogNorm(vmin=1e3, vmax=1e15)
-
     plot_1dpower_spectrum(eta, frequency_range, sky_calibrated[0,:], title="Sky Error", axes=axes[0],
                         axes_label_font=labelfontsize, tickfontsize=ticksize, xlabel_show=True, ylabel_show=True)
 
@@ -97,14 +94,6 @@ def main(labelfontsize = 20, ticksize= 15):
     plot_1dpower_spectrum(eta, frequency_range, eor_power_spectrum[0, :], axes=axes[1], ratio=True, color = 'k')
     plot_1dpower_spectrum(eta, frequency_range, eor_power_spectrum[0, :], axes=axes[2], ratio=True, color = 'k')
 
-    # plot_power_contours(eta, frequency_range, from_jansky_to_milikelvin(position_calibrated, frequency_range)/eor_power_spectrum,
-    #                     axes=axes[0], ratio=True, axes_label_font=labelfontsize, tickfontsize=ticksize, xlabel_show=True, norm=ps_norm, ylabel_show=False, contour_levels=contour_levels)
-    #
-    # plot_power_contours(u_range, eta, frequency_range, from_jansky_to_milikelvin(beam_calibrated, frequency_range)/eor_power_spectrum,
-    #                     axes=axes[1], ratio=True, axes_label_font=labelfontsize, tickfontsize=ticksize, xlabel_show=True, norm=ps_norm, ylabel_show=False, contour_levels=contour_levels)
-    #
-    # plot_power_contours(u_range, eta, frequency_range, from_jansky_to_milikelvin(total_calibrated, frequency_range)/eor_power_spectrum,
-    #                     axes=axes[2], ratio=True, axes_label_font=labelfontsize, tickfontsize=ticksize, xlabel_show=True, norm=ps_norm, ylabel_show=False, contour_levels=contour_levels)
     pyplot.tight_layout()
     pyplot.savefig("../plots/Calibrated_Residuals_Absolute_MWA.pdf")
     pyplot.show()
