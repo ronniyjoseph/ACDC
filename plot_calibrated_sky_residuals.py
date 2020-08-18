@@ -84,7 +84,6 @@ def main(labelfontsize = 20, ticksize= 15):
     plot_2dpower_spectrum(u_range, eta, frequency_range, beam_power, title="Beam Error", axes=axes[1],
                         axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=False,
                         xlabel_show=True, norm=ps_norm, ylabel_show=False)
-
     plot_2dpower_spectrum(u_range, eta, frequency_range, total_power, title="Total Error", axes=axes[2],
                         axes_label_font=labelfontsize, tickfontsize=ticksize, colorbar_show=True,
                         xlabel_show=True, norm=ps_norm, ylabel_show=False, zlabel_show=True)
@@ -103,7 +102,7 @@ def main(labelfontsize = 20, ticksize= 15):
     #                     norm=ps_norm, ylabel_show=False, contour_levels=contour_levels, contour_label_locs=total_clocations)
 
     pyplot.tight_layout()
-    pyplot.savefig("../plots/Calibrated_Residuals_Sky_MWA.pdf")
+    pyplot.savefig("../plots/Calibrated_Residuals_Sky_MWA_2.0.pdf")
     pyplot.show()
     return
 

@@ -77,6 +77,7 @@ def main(labelfontsize = 20, ticksize= 15):
     sky_calibrated = sky_power[index, ...]
     beam_calibrated= beam_power[index,...]
     total_calibrated= total_power[index, ...]
+
     eor_power_spectrum = eor_power_spectrum[index,...]
 
     figure, axes = pyplot.subplots(1, 3, figsize=(15, 5))
