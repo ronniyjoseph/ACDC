@@ -217,12 +217,12 @@ class GainCovariance(Covariance):
             self.__dict__[k] = copy.deepcopy(v)
 
         self.residual_matrix = copy.deepcopy(residual_covariance.matrix)
-        self.compute_covariance(calibration_type = calibration_type, baseline_table=baseline_table,
+        self.compute_covariance(residual_covariance, calibration_type = calibration_type, baseline_table=baseline_table,
                                 n_parameters = n_parameters)
         return
 
-    def compute_covariance(self, calibration_type = None, baseline_table=None, n_parameters = None):
-
+    def compute_covariance(self,residuals, calibration_type = None, baseline_table=None, n_parameters = None):
+        print(f"Gain Covariance for {calibration_type} calibration")
         if calibration_type == "sky" or calibration_type == 'absolute':
             model_variance = sky_moment_returner(2, s_low=self.s_low, s_mid=self.s_mid, s_high=self.model_depth,
                                                  k1 = self.k1, gamma1 = self.alpha1, k2 = self.k2, gamma2 = self.alpha2)
@@ -232,16 +232,16 @@ class GainCovariance(Covariance):
         else:
             raise ValueError("Specify calibration_type= to 'sky' or 'relative")
 
-        self.residual_matrix /= model_variance
+        residuals.matrix /= model_variance
         if baseline_table is None:
             assert n_parameters is not None, "Specifice calibration parameter number"
             self.matrix = np.sum(self.residual_matrix, axis=0) * (1 / (n_parameters * len(self.u))) ** 2
         else:
             weights = compute_weights(self.u, baseline_table, calibration_type)
-            self.matrix = np.zeros_like(self.residual_matrix)
+            self.matrix = np.zeros_like(residuals.matrix)
             for k in range(len(self.u)):
-                u_weight_reshaped = np.tile(weights[k, :].flatten(), (len(self.nu), len(self.nu), 1)).T
-                self.matrix[k, ...] = np.sum(self.residual_matrix * u_weight_reshaped, axis=0)
+                for j in range(len(self.u)):
+                    self.matrix[k, ...] += residuals.matrix[j, ...] * weights[k, j]
 
         if calibration_type == "absolute":
             absolute_averaged_covariance = np.zeros_like(self.matrix)
