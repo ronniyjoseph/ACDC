@@ -214,9 +214,9 @@ class GainCovariance(Covariance):
     def __init__(self, residual_covariance, calibration_type = None, baseline_table = None, n_parameters = None):
         super().__init__(self)
         for k, v in residual_covariance.__dict__.items():
-            self.__dict__[k] = copy.deepcopy(v)
+            if k!= "matrix":
+                self.__dict__[k] = copy.deepcopy(v)
 
-        self.residual_matrix = copy.deepcopy(residual_covariance.matrix)
         self.compute_covariance(residual_covariance, calibration_type = calibration_type, baseline_table=baseline_table,
                                 n_parameters = n_parameters)
         return
