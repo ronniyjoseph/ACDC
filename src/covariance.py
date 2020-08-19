@@ -260,15 +260,16 @@ class CalibratedResiduals(Covariance):
             self.__dict__[k] = copy.deepcopy(v)
         self.gain_matrix = gaincovariance.matrix
         if model_matrix is not None:
-            self.model_matrix = copy.deepcopy(model_matrix.matrix)
+            self.model_matrix = model_matrix.matrix
         else:
             self.model_matrix = model_matrix
             assert self.model_depth is not None, "Set peeling limit through 'model_limit'"
 
         if residual_matrix is not None:
-            self.residual_matrix = copy.deepcopy(residual_matrix.matrix)
+            self.residual_matrix = residual_matrix.matrix
         else:
             self.model_matrix = model_matrix
+
         self.compute_covariance()
         return
 
